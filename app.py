@@ -1,74 +1,74 @@
 import streamlit as st
 import json
-import requests
-import base64
-from datetime import datetime
+import os
 
-# --- 設定 ---
-TOKEN = st.secrets["GITHUB_TOKEN"]
-REPO = st.secrets["GITHUB_REPO"]
+# ページ設定：ワイドモードで視認性を確保
+st.set_page_config(page_title="Antigravity Coffee Dashboard", layout="wide")
+
+# データ保存用ファイル
 FILE_PATH = "data.json"
 
-st.set_page_config(page_title="Coffee Insights Dashboard", layout="wide")
+def load_data():
+    if os.path.exists(FILE_PATH):
+        try:
+            with open(FILE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return []
+    return []
 
-def get_data():
-    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-    headers = {"Authorization": f"token {TOKEN}"}
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        content = res.json()
-        decoded = base64.b64decode(content['content']).decode('utf-8')
-        return json.loads(decoded), content['sha']
-    return [], None
+def save_data(data):
+    with open(FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-def save_data(data, sha):
-    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-    headers = {"Authorization": f"token {TOKEN}"}
-    updated_content = json.dumps(data, indent=2, ensure_ascii=False)
-    payload = {
-        "message": f"Update insight at {datetime.now()}",
-        "content": base64.b64encode(updated_content.encode('utf-8')).decode('utf-8'),
-        "sha": sha
-    }
-    res = requests.put(url, headers=headers, json=payload)
-    return res.status_code == 200
+# データの読み込み
+data = load_data()
 
-# --- メイン画面 ---
-st.title("☕ Coffee Insights Dashboard")
+st.title("Antigravity Coffee Dashboard")
+st.header("深掘り考察の蓄積")
 
-data, sha = get_data()
-
-# 新規投稿の下書き作成
-with st.sidebar:
-    st.header("📝 新規追加")
-    new_url = st.text_input("Xの投稿URLを入力")
-    if st.button("枠を作成する"):
-        new_entry = {
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "x_url": new_url,
-            "insight": "",
-            "status": "draft"
-        }
-        data.insert(0, new_entry)
-        save_data(data, sha)
-        st.rerun()
-
-# 考察一覧の表示
+# 考察一覧のループ表示
 for i, item in enumerate(data):
-    with st.expander(f"📅 {item['date']} | {item['x_url']}", expanded=(item['status'] == 'draft')):
-        new_insight = st.text_area("深掘り考察（ここにGeminiの回答を貼る）", item['insight'], key=f"area_{i}", height=250)
+    # 1件ごとに枠（コンテナ）で区切る
+    with st.container(border=True):
         
-        col1, col2 = st.columns(2)
-        if col1.button("💾 保存して全端末に同期", key=f"save_{i}"):
+        # --- レイアウト上部：ヘッダーと直接リンクボタン ---
+        col_info, col_link = st.columns([0.7, 0.3])
+        with col_info:
+            st.subheader(f"📅 {item.get('date', 'Date')} | ID: {item.get('id', 'N/A')}")
+        with col_link:
+            if item.get('x_url'):
+                # Xの投稿へ直接飛べるボタン
+                st.link_button("🚀 元の投稿(X)を開く", item['x_url'], use_container_width=True)
+
+        # --- 重要：プレビュー表示枠（ここでURLがリンク化される） ---
+        if item.get('insight'):
+            st.info("📝 考察プレビュー（リンクが有効なエリア）")
+            # 考察内容をMarkdownとして描画。これでURLがクリック可能になります。
+            st.markdown(item['insight'])
+            st.divider()
+
+        # --- 編集用エリア ---
+        # Geminiの回答を貼り付ける場所
+        new_insight = st.text_area(
+            "✍️ 深掘り考察の編集（ここにGeminiの回答を貼り付けて保存）",
+            value=item.get('insight', ''),
+            key=f"area_{i}",
+            height=300
+        )
+        
+        # --- 操作ボタン ---
+        save_col, del_col = st.columns([1, 1])
+        if save_col.button("💾 この内容で保存", key=f"save_{i}"):
             data[i]['insight'] = new_insight
-            data[i]['status'] = 'published'
-            if save_data(data, sha):
-                st.success("GitHubのデータを更新しました！スマホでも確認可能です。")
-                st.rerun()
-            else:
-                st.error("保存に失敗しました。Secretsの設定を確認してください。")
-        
-        if col2.button("🗑 削除", key=f"del_{i}"):
-            data.pop(i)
-            save_data(data, sha)
+            save_data(data)
+            st.success("保存しました。プレビューを確認してください。")
             st.rerun()
+            
+        if del_col.button("🗑 項目を削除", key=f"del_{i}"):
+            data.pop(i)
+            save_data(data)
+            st.rerun()
+
+st.divider()
+st.caption("Antigravity Coffee Dashboard | System Version: 2.0 (Stable)")
