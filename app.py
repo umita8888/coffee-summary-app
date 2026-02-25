@@ -1,55 +1,72 @@
 import streamlit as st
 import json
-import os
+import requests
+import base64
 from datetime import datetime
 
-DATA_FILE = "data.json"
+# --- 設定 ---
+TOKEN = st.secrets["GITHUB_TOKEN"]
+REPO = st.secrets["GITHUB_REPO"]
+FILE_PATH = "data.json"
 
-def load_data():
-    if not os.path.exists(DATA_FILE): return []
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except: return []
+st.set_page_config(page_title="Coffee Insights Dashboard", layout="wide")
 
-def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def get_data():
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {TOKEN}"}
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200:
+        content = res.json()
+        decoded = base64.b64decode(content['content']).decode('utf-8')
+        return json.loads(decoded), content['sha']
+    return [], None
 
-st.set_page_config(page_title="Coffee Insights", layout="wide")
-data = load_data()
+def save_data(data, sha):
+    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
+    headers = {"Authorization": f"token {TOKEN}"}
+    updated_content = json.dumps(data, indent=2, ensure_ascii=False)
+    payload = {
+        "message": f"Update insight at {datetime.now()}",
+        "content": base64.b64encode(updated_content.encode('utf-8')).decode('utf-8'),
+        "sha": sha
+    }
+    res = requests.put(url, headers=headers, json=payload)
+    return res.status_code == 200
 
-# --- サイドバー ---
-st.sidebar.header("🤖 Gemini連携")
-gemini_url = "https://gemini.google.com/app/44fc448c9f9f8e77?hl=ja" 
-st.sidebar.markdown(f"**[💬 Geminiを開いて考察を依頼]({gemini_url})**")
-
-with st.sidebar.form("input"):
-    u = st.text_input("新規記事URL")
-    if st.form_submit_button("1. 下書き作成"):
-        data.append({"date": datetime.now().strftime("%Y-%m-%d"), "x_url": u, "insight": "", "status": "draft"})
-        save_data(data)
-        st.rerun()
-
-# --- メイン：蓄積データ表示 ---
+# --- メイン画面 ---
 st.title("☕ Coffee Insights Dashboard")
 
-# データの並び順を新しい順にする
-for idx, entry in enumerate(reversed(data)):
-    # 元のリストのインデックスを計算
-    original_idx = len(data) - 1 - idx
-    
-    with st.expander(f"📅 {entry['date']} | {entry['x_url']}", expanded=(entry['status'] == 'draft')):
-        # 編集エリア
-        text = st.text_area("考察内容（Geminiの回答をここに貼り付け）", value=entry['insight'], height=200, key=f"edit_{idx}")
+data, sha = get_data()
+
+# 新規投稿の下書き作成
+with st.sidebar:
+    st.header("👁 Gemini連携")
+    new_url = st.text_input("新規記事URL")
+    if st.button("下書き作成"):
+        new_entry = {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "x_url": new_url,
+            "insight": "",
+            "status": "draft"
+        }
+        data.insert(0, new_entry)
+        save_data(data, sha)
+        st.rerun()
+
+# 考察一覧の表示
+for i, item in enumerate(data):
+    with st.expander(f"📅 {item['date']} | {item['x_url']}", expanded=(item['status'] == 'draft')):
+        new_insight = st.text_area("考察内容", item['insight'], key=f"area_{i}", height=200)
         
-        col1, col2 = st.columns([1, 5])
-        if col1.button("💾 保存", key=f"save_{idx}"):
-            data[original_idx]['insight'] = text
-            data[original_idx]['status'] = 'published'
-            save_data(data)
-            st.rerun()
-        if col2.button("🗑️ 削除", key=f"del_{idx}"):
-            data.pop(original_idx)
-            save_data(data)
+        col1, col2 = st.columns(2)
+        if col1.button("💾 保存して全端末に同期", key=f"save_{i}"):
+            data[i]['insight'] = new_insight
+            data[i]['status'] = 'published'
+            if save_data(data, sha):
+                st.success("GitHubと同期しました！スマホでも確認できます。")
+                st.rerun()
+        
+        if col2.button("🗑 削除", key=f"del_{i}"):
+            data.pop(i)
+            save_data(data, sha)
             st.rerun()
