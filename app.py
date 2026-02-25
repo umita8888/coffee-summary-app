@@ -40,9 +40,9 @@ data, sha = get_data()
 
 # 新規投稿の下書き作成
 with st.sidebar:
-    st.header("👁 Gemini連携")
-    new_url = st.text_input("新規記事URL")
-    if st.button("下書き作成"):
+    st.header("📝 新規追加")
+    new_url = st.text_input("Xの投稿URLを入力")
+    if st.button("枠を作成する"):
         new_entry = {
             "date": datetime.now().strftime("%Y-%m-%d"),
             "x_url": new_url,
@@ -56,15 +56,17 @@ with st.sidebar:
 # 考察一覧の表示
 for i, item in enumerate(data):
     with st.expander(f"📅 {item['date']} | {item['x_url']}", expanded=(item['status'] == 'draft')):
-        new_insight = st.text_area("考察内容", item['insight'], key=f"area_{i}", height=200)
+        new_insight = st.text_area("深掘り考察（ここにGeminiの回答を貼る）", item['insight'], key=f"area_{i}", height=250)
         
         col1, col2 = st.columns(2)
         if col1.button("💾 保存して全端末に同期", key=f"save_{i}"):
             data[i]['insight'] = new_insight
             data[i]['status'] = 'published'
             if save_data(data, sha):
-                st.success("GitHubと同期しました！スマホでも確認できます。")
+                st.success("GitHubのデータを更新しました！スマホでも確認可能です。")
                 st.rerun()
+            else:
+                st.error("保存に失敗しました。Secretsの設定を確認してください。")
         
         if col2.button("🗑 削除", key=f"del_{i}"):
             data.pop(i)
