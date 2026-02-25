@@ -1,11 +1,9 @@
 import streamlit as st
 import json
 import os
+from datetime import datetime
 
-# ページ設定：ワイドモードで視認性を確保
 st.set_page_config(page_title="Antigravity Coffee Dashboard", layout="wide")
-
-# データ保存用ファイル
 FILE_PATH = "data.json"
 
 def load_data():
@@ -21,54 +19,62 @@ def save_data(data):
     with open(FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# データの読み込み
 data = load_data()
 
+# --- サイドバー：新規枠の作成エリア ---
+with st.sidebar:
+    st.header("📝 新規追加")
+    new_url = st.text_input("Xの投稿URLを入力")
+    if st.button("枠を作成する"):
+        if new_url:
+            # 新しいデータ構造を作成
+            new_item = {
+                "id": new_url.split('/')[-1].split('?')[0],
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "x_url": new_url,
+                "insight": "",
+                "status": "draft"
+            }
+            data.insert(0, new_item) # 最新が上にくるように挿入
+            save_data(data)
+            st.success("枠を作成しました")
+            st.rerun()
+
+# --- メインエリア：考察の表示と編集 ---
 st.title("Antigravity Coffee Dashboard")
 st.header("深掘り考察の蓄積")
 
-# 考察一覧のループ表示
 for i, item in enumerate(data):
-    # 1件ごとに枠（コンテナ）で区切る
     with st.container(border=True):
-        
-        # --- レイアウト上部：ヘッダーと直接リンクボタン ---
         col_info, col_link = st.columns([0.7, 0.3])
         with col_info:
-            st.subheader(f"📅 {item.get('date', 'Date')} | ID: {item.get('id', 'N/A')}")
+            st.subheader(f"📅 {item.get('date')} | ID: {item.get('id')}")
         with col_link:
             if item.get('x_url'):
-                # Xの投稿へ直接飛べるボタン
                 st.link_button("🚀 元の投稿(X)を開く", item['x_url'], use_container_width=True)
 
-        # --- 重要：プレビュー表示枠（ここでURLがリンク化される） ---
+        # プレビュー枠
         if item.get('insight'):
-            st.info("📝 考察プレビュー（リンクが有効なエリア）")
-            # 考察内容をMarkdownとして描画。これでURLがクリック可能になります。
+            st.info("📝 考察プレビュー（リンク有効）")
             st.markdown(item['insight'])
             st.divider()
 
-        # --- 編集用エリア ---
-        # Geminiの回答を貼り付ける場所
+        # 編集枠
         new_insight = st.text_area(
-            "✍️ 深掘り考察の編集（ここにGeminiの回答を貼り付けて保存）",
+            "✍️ 深掘り考察の編集",
             value=item.get('insight', ''),
             key=f"area_{i}",
-            height=300
+            height=250
         )
         
-        # --- 操作ボタン ---
-        save_col, del_col = st.columns([1, 1])
-        if save_col.button("💾 この内容で保存", key=f"save_{i}"):
+        save_col, del_col = st.columns(2)
+        if save_col.button("💾 保存", key=f"save_{i}"):
             data[i]['insight'] = new_insight
             save_data(data)
-            st.success("保存しました。プレビューを確認してください。")
+            st.success("保存完了")
             st.rerun()
             
-        if del_col.button("🗑 項目を削除", key=f"del_{i}"):
+        if del_col.button("🗑 削除", key=f"del_{i}"):
             data.pop(i)
             save_data(data)
             st.rerun()
-
-st.divider()
-st.caption("Antigravity Coffee Dashboard | System Version: 2.0 (Stable)")
