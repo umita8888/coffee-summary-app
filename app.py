@@ -3,60 +3,52 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
 # ページ設定
-st.set_page_config(page_title="Coffee Insight Dashboard", layout="wide")
+st.set_page_config(layout="wide", page_title="Antigravity Coffee Dashboard")
 
-st.title("☕️ Coffee Insight Dashboard")
-st.write("日々のコーヒーニュースと深層考察を蓄積する資産管理ツールです。")
-
-# Google Sheets への接続設定
-# type=GSheetsConnection を使い、secrets.toml の認証情報を優先させます
+# 1. 接続設定：secrets.toml の [connections.gsheets] を使用
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# データの読み込み
+def get_data():
+    # スプレッドシートから全データを読み込む
+    return conn.read(ttl="0") # キャッシュを無効化して常に最新を取得
+
+def update_spreadsheet(df):
+    # スプレッドシートの内容を現在のデータフレームで上書き
+    conn.update(data=df)
+
+st.title("Antigravity Coffee Dashboard")
+
 try:
-    # 常に最新を読み込むため ttl=0
-    df = conn.read(ttl=0)
-except Exception:
-    df = pd.DataFrame(columns=["タイトル", "ソース", "考察内容"])
+    # データの取得
+    df = get_data()
 
-# 入力フォーム（画像のデザインに準拠）
-with st.form("insight_form"):
-    st.subheader("📝 新しい考察を登録")
-    title = st.text_input("タイトル")
-    source = st.text_input("ソース (URLなど)")
-    
-    # Geminiからコピーした内容をそのまま貼り付ける場所
-    content_input = st.text_area("Geminiの出力（コピー内容をここにペースト）", height=400)
-    
-    submit_button = st.form_submit_button("スプレッドシートへ保存")
+    # 既存のデータをループで表示
+    for i, row in df.iterrows():
+        with st.container(border=True):
+            # 表示用：日付とID
+            st.markdown(f"### 📅 {row['date']} | ID: {row['id']}")
+            
+            # プレビュー（Markdownとしてリンク等を有効化）
+            if pd.notna(row['insight']) and row['insight'] != "":
+                st.info("📝 現在のプレビュー（リンク有効）")
+                st.markdown(row['insight'])
+            
+            st.divider()
+            
+            # 編集用：テキストエリア
+            new_insight = st.text_area(
+                "編集用（Geminiの回答をここに貼る）", 
+                value=row['insight'] if pd.notna(row['insight']) else "", 
+                key=f"edit_{i}", 
+                height=250
+            )
+            
+            # 保存ボタン
+            if st.button("💾 スプレッドシートへ保存", key=f"save_{i}"):
+                df.at[i, 'insight'] = new_insight
+                update_spreadsheet(df)
+                st.success(f"ID: {row['id']} の保存に成功しました！")
+                st.rerun()
 
-if submit_button:
-    if title and content_input:
-        # 新しいデータの作成
-        new_row = pd.DataFrame([{
-            "タイトル": title,
-            "ソース": source,
-            "考察内容": content_input
-        }])
-        
-        # 既存データと結合
-        updated_df = pd.concat([df, new_row], ignore_index=True)
-        
-        try:
-            # 【重要】公開URLではなく、サービスアカウント認証を使って更新を実行
-            conn.update(data=updated_df)
-            st.success("スプレッドシートへの保存に成功しました！")
-            st.rerun()
-        except Exception as e:
-            st.error(f"保存中にエラーが発生しました。権限を確認してください: {e}")
-    else:
-        st.warning("タイトルと考察内容は必須です。")
-
-# 蓄積されたデータの表示
-st.divider()
-st.subheader("🗂 蓄積された考察一覧")
-if not df.empty:
-    # 最新のものが一番上に表示されるように表示
-    st.dataframe(df.iloc[::-1], use_container_width=True)
-else:
-    st.write("まだデータがありません。")
+except Exception as e:
+    st.error(f"接続エラーが発生しました。secrets.toml の設定を確認してください: {e}")
