@@ -16,12 +16,12 @@ try:
     if df.empty:
         st.warning("スプレッドシートが空です。データを確認してください。")
     else:
-        # 3. 列名の存在チェック（エラー回避の論理強化）
+        # 3. 列名の存在チェック
         cols = df.columns.tolist()
         
         for i, row in df.iterrows():
             with st.container(border=True):
-                # 列名が存在するか確認しながら表示（なければ 'N/A'）
+                # 列名が存在するか確認しながら表示
                 display_date = row['date'] if 'date' in cols else "No Date"
                 display_id = row['id'] if 'id' in cols else f"Row {i}"
                 
@@ -41,15 +41,17 @@ try:
                     if 'insight' in cols:
                         df.at[i, 'insight'] = new_insight
                         conn.update(data=df)
-                        st.success("スプレッドシートへの保存に成功しました！")
+                        st.success("保存に成功しました！")
                         st.rerun()
                     else:
-                        st.error("スプレッドシートに 'insight' という列が見つかりません。")
+                        st.error("シートに 'insight' 列がありません。")
 
 except Exception as e:
     st.error(f"【論理エラー発生】: {e}")
     with st.expander("解決のためのチェックリスト"):
         st.write("""
-        1. **Secretsの確認**: `[connections.gsheets]` という見出しが正しいか。
-        2. **URLの確認**: `spreadsheet = "..."` が正しいスプレッドシートを指しているか。
-        3. **共有設定**: スプレッドシートを `client_email` のアドレスに「編集者」として共有した
+        1. **Secretsの確認**: [connections.gsheets] 見出しがあるか。
+        2. **URLの確認**: spreadsheet = "..." が正しいか。
+        3. **共有設定**: client_email を「編集者」として招待したか。
+        4. **列名**: シートの1行目が date, id, insight か。
+        """)
