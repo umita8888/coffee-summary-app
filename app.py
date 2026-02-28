@@ -8,7 +8,6 @@ st.title("Antigravity Coffee Dashboard")
 
 try:
     # 1. 接続情報の構築（Secretsの内容をメモリ上で整形）
-    # Secretsから取得した値を辞書にまとめ、\n を本物の改行に直す
     s = st.secrets.connections.gsheets
     conn_info = {
         "type": "service_account",
@@ -24,7 +23,10 @@ try:
         "spreadsheet": s.get("spreadsheet")
     }
 
-    # 2. 修正済みの辞書を connection に直接渡す（この書き方が最も汎用的です）
+    # --- 論理修正：引数の衝突（type）を回避するため辞書から削除 ---
+    conn_info.pop("type", None)
+
+    # 2. 修正済みの辞書を connection に展開して渡す
     conn = st.connection("gsheets", type=GSheetsConnection, **conn_info)
     
     # 3. データの読み込み
@@ -33,7 +35,7 @@ try:
     if df.empty:
         st.warning("スプレッドシートが空です。")
     else:
-        # スプレッドシートを一覧表示
+        # スプレッドシートを表示
         st.dataframe(df)
         
         # 編集エリアの構築
@@ -55,5 +57,4 @@ try:
                         st.rerun()
 
 except Exception as e:
-    # 全てのエラーをキャッチして表示
     st.error(f"【論理エラー発生】: {e}")
