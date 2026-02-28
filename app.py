@@ -7,11 +7,12 @@ st.set_page_config(layout="wide", page_title="Antigravity Dashboard")
 st.title("Antigravity Coffee Dashboard")
 
 try:
-    # 1. Secretsからデータを取得し、\n を置換した「純粋な認証辞書」を作成
+    # 1. Secretsからデータを取得し、Googleが求める形式に整える
     s = st.secrets.connections.gsheets
     
-    # 接続関数が混乱しないよう、認証に必要な項目だけを抽出・変換
-    cred_dict = {
+    # 秘密鍵の \n を本物の改行に変換し、認証に必要な構造を作成
+    service_account_info = {
+        "type": "service_account",
         "project_id": s.get("project_id"),
         "private_key_id": s.get("private_key_id"),
         "private_key": s.get("private_key", "").replace("\\n", "\n"),
@@ -20,12 +21,16 @@ try:
         "auth_uri": s.get("auth_uri"),
         "token_uri": s.get("token_uri"),
         "auth_provider_x509_cert_url": s.get("auth_provider_x509_cert_url"),
-        "client_x509_cert_url": s.get("client_x509_cert_url"),
-        "spreadsheet": s.get("spreadsheet")
+        "client_x509_cert_url": s.get("client_x509_cert_url")
     }
 
-    # 2. 接続の確立（type引数の重複を避ける）
-    conn = st.connection("gsheets", type=GSheetsConnection, **cred_dict)
+    # 2. 正しい引数名（service_account_info）で接続を確立
+    conn = st.connection(
+        "gsheets", 
+        type=GSheetsConnection, 
+        service_account_info=service_account_info,
+        spreadsheet=s.get("spreadsheet")
+    )
     
     # 3. データの読み込み
     df = conn.read(ttl=0)
@@ -34,6 +39,10 @@ try:
         st.warning("スプレッドシートが空です。")
     else:
         cols = df.columns.tolist()
+        # スプレッドシートを表示
+        st.dataframe(df)
+        
+        # 編集エリア
         for i, row in df.iterrows():
             with st.container(border=True):
                 display_date = row['date'] if 'date' in cols else "No Date"
