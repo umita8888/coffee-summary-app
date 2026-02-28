@@ -7,18 +7,26 @@ st.set_page_config(layout="wide", page_title="Antigravity Dashboard")
 st.title("Antigravity Coffee Dashboard")
 
 try:
-    # --- 論理修正：Secretsの \n を本物の改行に置換 ---
-    if "connections" in st.secrets and "gsheets" in st.secrets.connections:
-        # private_key 内の文字としての "\n" を実際の改行コードに置換
-        raw_key = st.secrets.connections.gsheets.get("private_key", "")
-        fixed_key = raw_key.replace("\\n", "\n")
-        # 置換した鍵を一時的に上書き（メモリ上のみ）
-        st.secrets.connections.gsheets["private_key"] = fixed_key
+    # 1. Secretsからデータを取得し、\n を本物の改行に置換した辞書を作成
+    s = st.secrets.connections.gsheets
+    credentials = {
+        "type": s.get("type"),
+        "project_id": s.get("project_id"),
+        "private_key_id": s.get("private_key_id"),
+        "private_key": s.get("private_key", "").replace("\\n", "\n"), # ここで置換
+        "client_email": s.get("client_email"),
+        "client_id": s.get("client_id"),
+        "auth_uri": s.get("auth_uri"),
+        "token_uri": s.get("token_uri"),
+        "auth_provider_x509_cert_url": s.get("auth_provider_x509_cert_url"),
+        "client_x509_cert_url": s.get("client_x509_cert_url"),
+        "spreadsheet": s.get("spreadsheet")
+    }
 
-    # 1. 接続の確立
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    # 2. 置換済みの credentials を使って接続（Secrets自体は汚さない）
+    conn = st.connection("gsheets", type=GSheetsConnection, **credentials)
     
-    # 2. データの読み込み
+    # 3. データの読み込み
     df = conn.read(ttl=0)
     
     if df.empty:
