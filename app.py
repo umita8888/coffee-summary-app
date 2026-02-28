@@ -6,16 +6,19 @@ from google.oauth2.service_account import Credentials
 st.set_page_config(layout="wide", page_title="Antigravity Dashboard")
 st.title("Antigravity Coffee Dashboard")
 
-# --- 根本解決：認証プロセスの自力構築 ---
 try:
     s = st.secrets.connections.gsheets
     
-    # 1. 認証情報の辞書を作成（\n を本物の改行に置換）
+    # --- 論理修正：\n を「文字」から「改行コード」へ物理的に変換 ---
+    raw_key = s.get("private_key", "")
+    # 一度バイナリに直してエスケープを解除する魔法の処理
+    fixed_key = raw_key.encode('utf-8').decode('unicode_escape')
+    
     creds_dict = {
         "type": "service_account",
         "project_id": s.get("project_id"),
         "private_key_id": s.get("private_key_id"),
-        "private_key": s.get("private_key", "").replace("\\n", "\n"), # 文字としての\nを改行に変換
+        "private_key": fixed_key, # 変換後の鍵
         "client_email": s.get("client_email"),
         "client_id": s.get("client_id"),
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -31,36 +34,35 @@ try:
 
     # 3. スプレッドシートを開く
     sh = gc.open_by_url(s.get("spreadsheet"))
-    worksheet = sh.get_worksheet(0) # 最初のシート
+    worksheet = sh.get_worksheet(0)
 
-    # 4. データの読み込みと表示
+    # 4. データの読み込み
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
 
     if df.empty:
-        st.warning("スプレッドシートが空です。")
+        st.warning("スプレッドシートが空です。記事を投稿してデータを蓄積しましょう。")
     else:
-        # データの表示
+        st.success("接続成功。過去の考察データを読み込みました。")
         st.dataframe(df, use_container_width=True)
         
-        # 編集機能
+        # 編集・プール機能
         cols = df.columns.tolist()
         for i, row in df.iterrows():
             with st.container(border=True):
                 display_date = row.get('date', f"Row {i+1}")
-                display_id = row.get('id', "No ID")
-                st.markdown(f"### 📅 {display_date} | ID: {display_id}")
+                st.markdown(f"### 📅 {display_date}")
                 
                 current_insight = row.get('insight', "")
-                new_insight = st.text_area("深層インサイト編集", value=str(current_insight), key=f"ed_{i}")
+                new_insight = st.text_area("深層インサイト（蓄積用）", value=str(current_insight), key=f"ed_{i}")
                 
-                if st.button("💾 この行を保存", key=f"btn_{i}"):
-                    # 特定のセルを更新（gspreadは1始まり。ヘッダーの分+1、0始まりインデックスの分+1）
-                    col_idx = cols.index('insight') + 1
-                    worksheet.update_cell(i + 2, col_idx, new_insight)
-                    st.success(f"行 {i+1} のインサイトを保存しました。")
-                    st.rerun()
+                if st.button("💾 この考察をプールする", key=f"btn_{i}"):
+                    if 'insight' in cols:
+                        col_idx = cols.index('insight') + 1
+                        worksheet.update_cell(i + 2, col_idx, new_insight)
+                        st.success("Googleスプレッドシートに永続保存しました。")
+                        st.rerun()
 
 except Exception as e:
     st.error(f"【根本エラー発生】: {e}")
-    st.info("Secretsの設定またはGoogleシートの共有設定（編集者権限）を確認してください。")
+    st.info("このエラーが出る場合、Secretsの private_key の前後の引用符を確認してください。")
