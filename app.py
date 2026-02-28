@@ -8,7 +8,7 @@ st.set_page_config(page_title="Antigravity Insight Dashboard", layout="wide")
 
 st.title("Antigravity 蓄積ダッシュボード")
 
-# スプレッドシート接続（ここが自動転送の要）
+# スプレッドシート接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # データの読み込み
@@ -19,8 +19,9 @@ df = load_data()
 
 # 入力フォーム
 with st.form("insight_form"):
+    st.subheader("新規考察の追加")
     x_url = st.text_input("X（旧Twitter）ポストのURL")
-    insight_text = st.text_area("考察内容", height=300)
+    insight_text = st.text_area("考察内容（umita風案＋深層インサイト）", height=300)
     submit_button = st.form_submit_button("スプレッドシートへ保存")
 
     if submit_button:
@@ -37,7 +38,7 @@ with st.form("insight_form"):
             # スプレッドシートの既存データに結合
             updated_df = pd.concat([df, new_row], ignore_index=True)
             
-            # 【重要】スプレッドシートへ自動書き込み（上書き更新）
+            # スプレッドシートへ自動書き込み
             conn.update(data=updated_df)
             
             st.success("スプレッドシートへ保存しました！")
@@ -45,5 +46,13 @@ with st.form("insight_form"):
         else:
             st.error("URLと考察を入力してください。")
 
-st.subheader("現在の蓄積データ")
-st.dataframe(df.sort_values(by="date", ascending=False), use
+# 蓄積済みデータの表示（新しい順）
+st.divider()
+st.subheader("過去に確定した考察・資産リスト")
+
+if not df.empty:
+    # 日付でソートして表示
+    display_df = df.sort_values(by="date", ascending=False)
+    st.dataframe(display_df, use_container_width=True)
+else:
+    st.info("まだ蓄積されたデータがありません。最初の考察を入力してください。")
