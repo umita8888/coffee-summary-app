@@ -7,13 +7,14 @@ st.set_page_config(layout="wide", page_title="Antigravity Dashboard")
 st.title("Antigravity Coffee Dashboard")
 
 try:
-    # 1. Secretsからデータを取得し、\n を本物の改行に置換した辞書を作成
+    # 1. Secretsからデータを取得し、\n を置換した「純粋な認証辞書」を作成
     s = st.secrets.connections.gsheets
-    credentials = {
-        "type": s.get("type"),
+    
+    # 接続関数が混乱しないよう、認証に必要な項目だけを抽出・変換
+    cred_dict = {
         "project_id": s.get("project_id"),
         "private_key_id": s.get("private_key_id"),
-        "private_key": s.get("private_key", "").replace("\\n", "\n"), # ここで置換
+        "private_key": s.get("private_key", "").replace("\\n", "\n"),
         "client_email": s.get("client_email"),
         "client_id": s.get("client_id"),
         "auth_uri": s.get("auth_uri"),
@@ -23,8 +24,8 @@ try:
         "spreadsheet": s.get("spreadsheet")
     }
 
-    # 2. 置換済みの credentials を使って接続（Secrets自体は汚さない）
-    conn = st.connection("gsheets", type=GSheetsConnection, **credentials)
+    # 2. 接続の確立（type引数の重複を避ける）
+    conn = st.connection("gsheets", type=GSheetsConnection, **cred_dict)
     
     # 3. データの読み込み
     df = conn.read(ttl=0)
